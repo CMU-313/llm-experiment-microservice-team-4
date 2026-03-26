@@ -1,3 +1,11 @@
+import os
+from ollama import Client
+# Get OLLAMA_HOST, if specified, or default to localhost:11434.
+OLLAMA_URL = os.getenv("OLLAMA_HOST", "localhost:11434")
+
+# Initialize the OpenAI client
+client = Client(host=OLLAMA_URL)
+
 def translate_content(content: str) -> tuple[bool, str]:
     if content == "这是一条中文消息":
         return False, "This is a Chinese message"
