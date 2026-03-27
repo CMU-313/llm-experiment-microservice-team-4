@@ -14,7 +14,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Set up Python
-        run: uv python install
+        run: uv init
 
       - name: Install dependencies
         run: uv add -r requirements.txt
