@@ -20,4 +20,4 @@ jobs:
         run: uv add -r requirements.txt
 
       - name: Run tests
-        run: uv run pytest test/
+        run: uv run pytest

@@ -1,5 +1,6 @@
 import os
 from ollama import Client
+import json
 # Get OLLAMA_HOST, if specified, or default to localhost:11434.
 OLLAMA_URL = os.getenv("OLLAMA_HOST", "localhost:11434")
 
@@ -39,4 +40,47 @@ def translate_content(content: str) -> tuple[bool, str]:
         return False, "This is a Catalan message"
     if content == "This is an English message":
         return True, "This is an English message"
-    return True, content
+    if content == "":
+        return True, ""
+    return query_llm_robust(content)
+
+def query_llm_robust(post: str) -> tuple[bool, str]:
+  """
+  Determines if a post is in English and provides a translation if it is not.
+  Returns a tuple (is_english: bool, translated_or_original_text: str).
+  """
+  # MODEL_NAME should be the name of the model you have selected, e.g., 'qwen2:0.5b'
+  MODEL_NAME = "llama3.1:8b"
+
+  context = """\
+    You are a language detection and translation engine.
+    Analyze the following input text.
+
+    1. Determine if the text is in English.
+    2. If it is NOT English, translate it into English.
+    3. If it is English, return the original text.
+    4. If the text is malformed or unintelligible, treat it as non-English and describe it as 'Unintelligible'.
+
+    Return the result ONLY as a JSON list containing a boolean and a string.
+    Example English: [true, "Hello how are you"]
+    Example Non-English: [false, "Translated text here"]
+    """
+
+  try:
+    response = client.chat(
+      model=MODEL_NAME,
+      messages=[
+        {"role": "system", "content": context},
+        {"role": "user", "content": f"INPUT: {post}\nOUTPUT:"}
+      ]
+    )
+
+    # Extract content and attempt to parse JSON response
+    content = response.message.content.strip()
+    result_list = json.loads(content)
+    if not type(result_list[0]) == bool or not type(result_list[1]) == str or result_list[1] == "Unintelligible":
+      return (False, post)
+    return tuple(result_list)[:2]
+
+  except Exception as e:
+    return (False, post)
