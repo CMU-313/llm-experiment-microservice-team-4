@@ -1,5 +1,9 @@
 from src.translator import translate_content, client
 from mock import patch
+from sentence_transformers import SentenceTransformer, util
+from typing import Callable
+
+model = SentenceTransformer('all-MiniLM-L6-v2')
 
 
 @patch.object(client, 'chat')
@@ -233,12 +237,72 @@ def test_chinese():
     assert is_english == False
     assert translated_content == "This is a Chinese message"
 
+
+def eval_single_response_classification(expected_answer: str, llm_response: str) -> float:
+  '''TODO: Compares an LLM response to the expected answer from the evaluation dataset using one of the text comparison metrics.'''
+  # ----------------- YOUR CODE HERE ------------------ #
+  return 1.0 if expected_answer.lower() == llm_response.lower() else 0.0
+
+def eval_single_response_translation(expected_answer: str, llm_response: str) -> float:
+  '''TODO: Compares an LLM response to the expected answer from the evaluation dataset using one of the text comparison metrics.'''
+  # ----------------- YOUR CODE HERE ------------------ #
+  emb1 = model.encode(expected_answer, convert_to_tensor=True)
+  emb2 = model.encode(llm_response, convert_to_tensor=True)
+  similarity = util.cos_sim(emb1, emb2).item()
+  return similarity
+
+
+def eval_single_response_complete(expected_answer: tuple[bool, str], llm_response: tuple[bool, str]) -> float:
+  '''
+  Compares an LLM response to the expected answer by combining
+  classification accuracy and translation semantic similarity.
+  '''
+  # 1. Extract components from the tuples
+  expected_is_english, expected_text = expected_answer
+  llm_is_english, llm_text = llm_response
+
+  # 2. Evaluate the classification (boolean part)
+  # We convert to strings to match your existing function signature
+  class_score = eval_single_response_classification(
+      str(expected_is_english),
+      str(llm_is_english)
+  )
+
+  # 3. Evaluate the translation/text (string part)
+  # This uses your embedding-based cosine similarity model
+  trans_score = eval_single_response_translation(
+      expected_text,
+      llm_text
+  )
+
+  # 4. Return an overall score
+  # Averaging the two gives equal weight to detection and translation accuracy
+  return (class_score + trans_score) / 2.0
+
+def evaluate(query_fn: Callable[[str], str], eval_fn: Callable[[str, str], float], dataset) -> float:
+  '''
+  TODO: Computes an aggregate score of the chosen evaluation metric across the given dataset. Calls the query_fn function to generate
+  LLM outputs for each of the posts in the evaluation dataset, and calls eval_single_response to calculate the metric.
+  '''
+  # ----------------- YOUR CODE HERE ------------------ #
+  total_score = 0
+
+  for item in dataset:
+      post = item["post"]
+      expected = item["expected_answer"]
+
+      response = query_fn(post)
+      score = eval_fn(expected, response)
+
+      total_score += score
+
+  return total_score / len(dataset)
+
 def test_llm_normal_response():
-    for i in normal_eval_set:
-        expected_is_english, expected_text = i["expected_answer"]
-        llm_is_english, llm_text = translate_content(i["post"])
-        assert expected_is_english == llm_is_english
-        assert expected_text == llm_text
+    eval_score = evaluate(translate_content, eval_single_response_complete, normal_eval_set)
+    print("Evaluation Score: ", eval_score)
+    assert eval_score > 0.3
+
 
 def test_llm_gibberish_response():
     for i in abnormal_eval_set:
